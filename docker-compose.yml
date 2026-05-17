@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  vince:
+    image: ${VINCE_IMAGE:-ghcr.io/korjavin/vince-vendor:latest}
+    container_name: ${VINCE_CONTAINER_NAME:-vince}
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    volumes:
+      - vince-data:/var/lib/vince-data
+    environment:
+      # --- Core server ---
+      VINCE_LISTEN: ${VINCE_LISTEN:-:8080}
+      VINCE_DATA: /var/lib/vince-data
+      VINCE_URL: https://${VINCE_HOST}
+
+      # --- TLS is terminated at Traefik; keep vince's built-in ACME off ---
+      VINCE_AUTO_TLS: "false"
+
+      # --- Optional: bootstrap an admin user on first startup.
+      # After the admin exists, comment these out and redeploy. ---
+      VINCE_ADMIN_NAME: ${VINCE_ADMIN_NAME:-}
+      VINCE_ADMIN_PASSWORD: ${VINCE_ADMIN_PASSWORD:-}
+
+      # --- Optional: pre-create sites at startup (comma-separated) ---
+      VINCE_DOMAINS: ${VINCE_DOMAINS:-}
+
+      # --- Optional: demo site shown on the landing page ---
+      VINCE_DEMO_URL: ${VINCE_DEMO_URL:-vinceanalytics.com}
+
+      # --- Optional: expose /debug/pprof/* (do not enable in prod) ---
+      VINCE_PROFILE: ${VINCE_PROFILE:-false}
+    labels:
+      # --- Enable Traefik ---
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK_NAME:-traefik_default}"
+
+      # --- Router ---
+      # NOTE: no forward-auth middleware here on purpose. Vince has its own
+      # login at /login, and the public /api/event endpoint must stay
+      # reachable for tracker scripts on instrumented sites.
+      - "traefik.http.routers.vince.rule=Host(`${VINCE_HOST}`)"
+      - "traefik.http.routers.vince.entrypoints=websecure"
+      - "traefik.http.routers.vince.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.vince.middlewares=${TRAEFIK_MIDDLEWARES:-}"
+
+      # --- Service ---
+      - "traefik.http.services.vince.loadbalancer.server.port=8080"
+
+networks:
+  traefik_default:
+    external: true
+    name: ${TRAEFIK_NETWORK_NAME:-traefik_default}
+
+volumes:
+  vince-data:
+    name: ${DATA_VOLUME_NAME:-vince_data}
