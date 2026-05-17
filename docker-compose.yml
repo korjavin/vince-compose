@@ -5,6 +5,9 @@ services:
     image: ${VINCE_IMAGE:-ghcr.io/korjavin/vince-vendor:latest}
     container_name: ${VINCE_CONTAINER_NAME:-vince}
     restart: unless-stopped
+    # Image ENTRYPOINT is bare /vince — without a subcommand it prints help
+    # and exits. The env-var flags below are scoped to `serve`.
+    command: ["serve"]
     networks:
       - traefik_default
     volumes:
