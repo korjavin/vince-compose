@@ -11,7 +11,11 @@ Docker Compose setup for [Vince Analytics](https://github.com/vinceanalytics/vin
 - **GitOps ready** — no secrets in the repository
 - **Portainer compatible** — auto-redeploy on push via webhook
 
-> **No forward-auth.** Vince ships its own login, and the `/api/event` ingestion endpoint must be reachable unauthenticated by tracker scripts on the sites you instrument. Adding `forward-auth@docker` here would break analytics collection.
+> **Split routing.** Two Traefik routers point at the same Vince container:
+> - `vince-public` matches `Host && Path('/api/event')` — no middlewares, so tracker scripts can post events anonymously.
+> - `vince` matches the rest of the host and applies `VINCE_AUTH_MIDDLEWARES` (default `auth-errors@docker,forward-auth@docker`) — so the dashboard, login, settings, and the internal stats API sit behind your OAuth proxy.
+>
+> Traefik picks the more specific router automatically; you do not need to set priorities. Vince's own `/login` still works as a second layer if you ever clear the auth middleware chain.
 
 ## Prerequisites
 
@@ -62,7 +66,7 @@ Push to `master` (or run **Deploy Vince Stack** manually in GitHub Actions).
 | `VINCE_HOST` | — | **Yes** | Hostname for Traefik routing (e.g. `vince.example.com`) |
 | `TRAEFIK_NETWORK_NAME` | `traefik_default` | No | External Traefik network name |
 | `TRAEFIK_CERTRESOLVER` | `myresolver` | No | Traefik TLS cert resolver name |
-| `TRAEFIK_MIDDLEWARES` | _(empty)_ | No | Extra Traefik middlewares for the router. Do NOT add forward-auth. |
+| `VINCE_AUTH_MIDDLEWARES` | `auth-errors@docker,forward-auth@docker` | No | Middlewares applied to the protected router. Public `/api/event` router is unaffected. Set to `""` to disable. |
 | `DATA_VOLUME_NAME` | `vince_data` | No | Named volume used for `/var/lib/vince-data` |
 | `VINCE_LISTEN` | `:8080` | No | Listen address inside the container |
 | `VINCE_ADMIN_NAME` | _(empty)_ | First boot | Admin username to create on startup |

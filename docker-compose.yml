@@ -36,14 +36,24 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK_NAME:-traefik_default}"
 
-      # --- Router ---
-      # NOTE: no forward-auth middleware here on purpose. Vince has its own
-      # login at /login, and the public /api/event endpoint must stay
-      # reachable for tracker scripts on instrumented sites.
+      # --- Public router: tracker ingestion only, no auth ---
+      # Tracker scripts on instrumented sites POST anonymously to /api/event.
+      # Traefik prioritises this router automatically because its rule is
+      # more specific (Host + Path) than the catch-all router below.
+      - "traefik.http.routers.vince-public.rule=Host(`${VINCE_HOST}`) && Path(`/api/event`)"
+      - "traefik.http.routers.vince-public.entrypoints=websecure"
+      - "traefik.http.routers.vince-public.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.vince-public.service=vince"
+
+      # --- Protected router: dashboard, login, admin, internal stats API ---
+      # Default middleware chain matches the silverbullet/oauth2-proxy pattern.
+      # Set VINCE_AUTH_MIDDLEWARES to "" to disable (Vince's own /login still
+      # protects admin actions) or to a different middleware chain.
       - "traefik.http.routers.vince.rule=Host(`${VINCE_HOST}`)"
       - "traefik.http.routers.vince.entrypoints=websecure"
       - "traefik.http.routers.vince.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
-      - "traefik.http.routers.vince.middlewares=${TRAEFIK_MIDDLEWARES:-}"
+      - "traefik.http.routers.vince.middlewares=${VINCE_AUTH_MIDDLEWARES:-auth-errors@docker,forward-auth@docker}"
+      - "traefik.http.routers.vince.service=vince"
 
       # --- Service ---
       - "traefik.http.services.vince.loadbalancer.server.port=8080"
